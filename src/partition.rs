@@ -21,6 +21,8 @@ pub trait PartitionExt: BlockDeviceExt {
     fn get_partition_label(&self) -> Option<&str>;
 
     /// Whether this partition is primary, logical, or extended.
+    ///
+    /// This only applies to MBR partition tables. Partitions are always `Primary` on GPT.
     fn get_partition_type(&self) -> PartitionType;
 
     /// The sector where this partition ends on the parent block device.

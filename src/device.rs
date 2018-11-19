@@ -20,6 +20,13 @@ pub trait BlockDeviceExt {
         })
     }
 
+    /// Checks if the device is a read-only device.
+    fn is_read_only(&self) -> bool {
+        Block::from_path(&self.sys_block_path())
+            .ok()
+            .map_or(false, |block| block.ro().ok() == Some(1))
+    }
+
     /// Checks if the device is a removable device.
     ///
     /// # Notes
