@@ -101,7 +101,7 @@ fn get_ext4_usage<R: Iterator<Item = io::Result<String>>>(
 fn get_ntfs_usage<R: Iterator<Item = io::Result<String>>>(
     mut reader: R,
 ) -> io::Result<u64> {
-    parse_field(&mut reader, "You might resize at", 4).map(|bytes| bytes / 512)
+    parse_field(&mut reader, "You might resize at", 4).map(|bytes| (bytes + (2 * 1024 * 1024)) / 512)
 }
 
 fn get_ntfs_size<R: Iterator<Item = io::Result<String>>>(
