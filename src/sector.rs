@@ -1,22 +1,17 @@
+use crate::device::BlockDeviceExt;
 use std::str::{self, FromStr};
 
 /// Trait for getting and sectors from a device.
-pub trait SectorExt {
-    /// The combined total number of sectors on the disk.
-    fn get_sectors(&self) -> u64;
-
-    /// The size of each sector, in bytes.
-    fn get_sector_size(&self) -> u64;
-
+pub trait SectorExt: BlockDeviceExt {
     /// Calculates the requested sector from a given `Sector` variant.
     fn get_sector(&self, sector: Sector) -> u64 {
         const MIB2: u64 = 2 * 1024 * 1024;
 
-        let end = || self.get_sectors() - (MIB2 / self.get_sector_size());
-        let megabyte = |size| (size * 1_000_000) / self.get_sector_size();
+        let end = || self.get_sectors() - (MIB2 / self.get_logical_block_size());
+        let megabyte = |size| (size * 1_000_000) / self.get_logical_block_size();
 
         match sector {
-            Sector::Start => MIB2 / self.get_sector_size(),
+            Sector::Start => MIB2 / self.get_logical_block_size(),
             Sector::End => end(),
             Sector::Megabyte(size) => megabyte(size),
             Sector::MegabyteFromEnd(size) => end() - megabyte(size),
@@ -26,8 +21,9 @@ pub trait SectorExt {
                 if value == ::std::u16::MAX {
                     self.get_sectors()
                 } else {
-                    ((self.get_sectors() * self.get_sector_size()) / ::std::u16::MAX as u64)
-                        * value as u64 / self.get_sector_size()
+                    ((self.get_sectors() * self.get_logical_block_size()) / ::std::u16::MAX as u64)
+                        * value as u64
+                        / self.get_logical_block_size()
                 }
             }
         }
@@ -63,6 +59,7 @@ impl From<u64> for Sector {
 
 impl FromStr for Sector {
     type Err = &'static str;
+
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if input.ends_with('M') {
             if input.starts_with('-') {
@@ -98,18 +95,22 @@ impl FromStr for Sector {
 mod tests {
     use super::*;
     use std::u16;
+    use std::path::Path;
 
     struct FictionalBlock(u64);
 
-    impl SectorExt for FictionalBlock {
-        fn get_sectors(&self) -> u64 { self.0 }
+    impl SectorExt for FictionalBlock {}
 
-        fn get_sector_size(&self) -> u64 { 512 }
+    impl BlockDeviceExt for FictionalBlock {
+        fn get_device_name(&self) -> &str { "fictional" }
+        fn get_device_path(&self) -> &Path { Path::new("/dev/fictional")  }
+        fn get_sectors(&self) -> u64 { self.0 }
+        fn get_logical_block_size(&self) -> u64 { 512 }
     }
 
     #[test]
     fn sector_get() {
-        let block = FictionalBlock (100_000_000);
+        let block = FictionalBlock(100_000_000);
         assert_eq!(4096, block.get_sector(Sector::Start));
         assert_eq!(99_995_904, block.get_sector(Sector::End));
         assert_eq!(1000, block.get_sector(Sector::Unit(1000)));
@@ -118,14 +119,14 @@ mod tests {
 
     #[test]
     fn sector_get_megabyte() {
-        let block = FictionalBlock (100_000_000);
+        let block = FictionalBlock(100_000_000);
         assert_eq!(2_000_000, block.get_sector(Sector::Megabyte(1024)));
         assert_eq!(97_995_904, block.get_sector(Sector::MegabyteFromEnd(1024)));
     }
 
     #[test]
     fn sector_get_percent() {
-        let block = FictionalBlock (100_000_000);
+        let block = FictionalBlock(100_000_000);
         assert_eq!(0, block.get_sector(Sector::Percent(0)));
         assert_eq!(24_998_826, block.get_sector(Sector::Percent(u16::MAX / 4)));
         assert_eq!(49_999_178, block.get_sector(Sector::Percent(u16::MAX / 2)));
@@ -159,9 +160,6 @@ mod tests {
         assert_eq!("20480M".parse::<Sector>(), Ok(Sector::Megabyte(20480)));
         assert_eq!("-0M".parse::<Sector>(), Ok(Sector::MegabyteFromEnd(0)));
         assert_eq!("-500M".parse::<Sector>(), Ok(Sector::MegabyteFromEnd(500)));
-        assert_eq!(
-            "-20480M".parse::<Sector>(),
-            Ok(Sector::MegabyteFromEnd(20480))
-        );
+        assert_eq!("-20480M".parse::<Sector>(), Ok(Sector::MegabyteFromEnd(20480)));
     }
 }

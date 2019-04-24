@@ -1,5 +1,4 @@
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 use sys_mount::FilesystemType as MountFS;
 
 /// Describes a file system format, such as ext4 or fat32.
@@ -72,6 +71,7 @@ impl FileSystem {
 
 impl FromStr for FileSystem {
     type Err = &'static str;
+
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let type_ = match string.to_lowercase().as_str() {
             "btrfs" => FileSystem::Btrfs,

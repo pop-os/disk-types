@@ -1,5 +1,4 @@
-use device::BlockDeviceExt;
-use partition::PartitionType;
+use crate::{device::BlockDeviceExt, partition::PartitionType};
 
 /// Specifies whether the partition table on the disk is **MSDOS** or **GPT**.
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
@@ -9,11 +8,11 @@ pub enum PartitionTable {
 }
 
 /// A possible error when validating the partition table.
-#[derive(Debug, Fail, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum PartitionTableError {
-    #[fail(display = "primary partitions exceeded on partition table")]
+    #[error(display = "primary partitions exceeded on partition table")]
     PrimaryPartitionsExceeded,
-    #[fail(display = "partition table not found")]
+    #[error(display = "partition table not found")]
     NotFound,
 }
 
@@ -26,7 +25,10 @@ pub trait PartitionTableExt: BlockDeviceExt {
     fn get_partition_type_count(&self) -> (usize, usize, bool);
 
     /// Checks if the additional partition type can be added to the partition table.
-    fn supports_additional_partition_type(&self, new_type: PartitionType) -> Result<(), PartitionTableError> {
+    fn supports_additional_partition_type(
+        &self,
+        new_type: PartitionType,
+    ) -> Result<(), PartitionTableError> {
         match self.get_partition_table() {
             Some(PartitionTable::Gpt) => (),
             Some(PartitionTable::Msdos) => {
@@ -52,27 +54,26 @@ mod tests {
     use std::path::Path;
 
     pub struct FictionalBlock {
-        partitions: Vec<PartitionType>
+        partitions: Vec<PartitionType>,
     }
 
     impl BlockDeviceExt for FictionalBlock {
-        fn get_device_path(&self) -> &Path { &Path::new("/dev/fake/block") }
+        fn get_device_name(&self) -> &str { "fictional" }
+
+        fn get_device_path(&self) -> &Path { Path::new("/dev/fictional")  }
+
         fn get_mount_point(&self) -> Option<&Path> { None }
     }
 
     impl PartitionTableExt for FictionalBlock {
-        fn get_partition_table(&self) -> Option<PartitionTable> {
-            Some(PartitionTable::Msdos)
-        }
+        fn get_partition_table(&self) -> Option<PartitionTable> { Some(PartitionTable::Msdos) }
 
         fn get_partition_type_count(&self) -> (usize, usize, bool) {
-            self.partitions
-                .iter()
-                .fold((0, 0, false), |sum, &part| match part {
-                    PartitionType::Logical => (sum.0, sum.1 + 1, sum.2),
-                    PartitionType::Primary => (sum.0 + 1, sum.1, sum.2),
-                    PartitionType::Extended => (sum.0, sum.1, true)
-                })
+            self.partitions.iter().fold((0, 0, false), |sum, &part| match part {
+                PartitionType::Logical => (sum.0, sum.1 + 1, sum.2),
+                PartitionType::Primary => (sum.0 + 1, sum.1, sum.2),
+                PartitionType::Extended => (sum.0, sum.1, true),
+            })
         }
     }
 
@@ -84,7 +85,7 @@ mod tests {
                 PartitionType::Primary,
                 PartitionType::Primary,
                 PartitionType::Primary,
-            ]
+            ],
         };
 
         assert_eq!(
@@ -105,7 +106,7 @@ mod tests {
                 PartitionType::Extended,
                 PartitionType::Logical,
                 PartitionType::Logical,
-            ]
+            ],
         };
 
         assert_eq!(
@@ -113,10 +114,7 @@ mod tests {
             Err(PartitionTableError::PrimaryPartitionsExceeded)
         );
 
-        assert_eq!(
-            max_extended.supports_additional_partition_type(PartitionType::Logical),
-            Ok(())
-        );
+        assert_eq!(max_extended.supports_additional_partition_type(PartitionType::Logical), Ok(()));
 
         let free = FictionalBlock {
             partitions: vec![
@@ -125,17 +123,11 @@ mod tests {
                 PartitionType::Extended,
                 PartitionType::Logical,
                 PartitionType::Logical,
-            ]
+            ],
         };
 
-        assert_eq!(
-            free.supports_additional_partition_type(PartitionType::Primary),
-            Ok(())
-        );
+        assert_eq!(free.supports_additional_partition_type(PartitionType::Primary), Ok(()));
 
-        assert_eq!(
-            free.supports_additional_partition_type(PartitionType::Logical),
-            Ok(())
-        );
+        assert_eq!(free.supports_additional_partition_type(PartitionType::Logical), Ok(()));
     }
 }

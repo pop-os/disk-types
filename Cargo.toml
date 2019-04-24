@@ -1,6 +1,6 @@
 [package]
 name = "disk-types"
-version = "0.1.3-alpha.0"
+version = "0.1.3"
 authors = ["Jeremy Soller <jackpot51@gmail.com>", "Michael Aaron Murphy <mmstickman@gmail.com>"]
 description = "Common traits and types for handling block devices, partitions, file systems, etc."
 repository = "https://github.com/pop-os/disk-types"
@@ -8,13 +8,12 @@ readme = "README.md"
 license = "MIT"
 keywords =  ["disk", "partition"]
 categories = ["filesystem", "os"]
+edition = "2018"
 
 [dependencies]
-sys-mount = "1.1.0"
+sys-mount = "1.2.0"
 tempdir = "0.3.7"
-os-detect = "0.2.1"
+os-detect = "0.2.2"
 sysfs-class = "0.1.1"
-failure = "0.1.3"
-failure_derive = "0.1.3"
 libparted = "0.1.3"
-bitflags = "1.0.4"
+err-derive = "0.1.5"

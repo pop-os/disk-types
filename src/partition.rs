@@ -1,13 +1,13 @@
-use device::BlockDeviceExt;
-use fs::FileSystem;
-use fs::FileSystem::*;
+use crate::{
+    device::BlockDeviceExt,
+    fs::FileSystem::{self, *},
+    usage::sectors_used,
+};
 use libparted::PartitionFlag;
-use usage::sectors_used;
-use tempdir::TempDir;
-use sys_mount::*;
-use std::io;
-use std::path::Path;
 use os_detect::{detect_os_from_device, OS};
+use std::{io, path::Path};
+use sys_mount::*;
+use tempdir::TempDir;
 
 /// Trait to provide methods for interacting with partition-based block device.
 pub trait PartitionExt: BlockDeviceExt {
@@ -36,37 +36,33 @@ pub trait PartitionExt: BlockDeviceExt {
 
     /// True if the partition is an ESP partition.
     fn is_esp_partition(&self) -> bool {
-        self.get_file_system().map_or(false, |fs| (fs == Fat16 || fs == Fat32)
-            && self.get_partition_flags().contains(&PartitionFlag::PED_PARTITION_ESP))
+        self.get_file_system().map_or(false, |fs| {
+            (fs == Fat16 || fs == Fat32)
+                && self.get_partition_flags().contains(&PartitionFlag::PED_PARTITION_ESP)
+        })
     }
 
     /// True if the partition is compatible for Linux to be installed on it.
     fn is_linux_compatible(&self) -> bool {
-        self.get_file_system()
-            .map_or(false, |fs| match fs {
-                Exfat | Ntfs | Fat16 | Fat32 | Lvm | Luks | Swap => false,
-                Btrfs | Xfs | Ext2 | Ext3 | Ext4 | F2fs => true
-            })
+        self.get_file_system().map_or(false, |fs| match fs {
+            Exfat | Ntfs | Fat16 | Fat32 | Lvm | Luks | Swap => false,
+            Btrfs | Xfs | Ext2 | Ext3 | Ext4 | F2fs => true,
+        })
     }
 
     /// True if this is a LUKS partition
-    fn is_luks(&self) -> bool {
-        self.get_file_system()
-            .map_or(false, |fs| fs == FileSystem::Luks)
-    }
+    fn is_luks(&self) -> bool { self.get_file_system().map_or(false, |fs| fs == FileSystem::Luks) }
 
     /// True if the partition is a swap partition.
-    fn is_swap(&self) -> bool {
-        self.get_file_system()
-            .map_or(false, |fs| fs == FileSystem::Swap)
-    }
+    fn is_swap(&self) -> bool { self.get_file_system().map_or(false, |fs| fs == FileSystem::Swap) }
 
     /// Mount the file system at a temporary directory, and allow the caller to scan it.
     fn probe<T, F>(&self, mut func: F) -> T
-        where F: FnMut(Option<(&Path, UnmountDrop<Mount>)>) -> T
+    where
+        F: FnMut(Option<(&Path, UnmountDrop<Mount>)>) -> T,
     {
-        let mount = self.get_file_system()
-            .and_then(|fs| TempDir::new("distinst").ok().map(|t| (fs, t)));
+        let mount =
+            self.get_file_system().and_then(|fs| TempDir::new("distinst").ok().map(|t| (fs, t)));
 
         if let Some((fs, tempdir)) = mount {
             let fs = match fs {
@@ -87,8 +83,7 @@ pub trait PartitionExt: BlockDeviceExt {
     /// Detects if an OS is installed to this partition, and if so, what the OS
     /// is named.
     fn probe_os(&self) -> Option<OS> {
-        self.get_file_system()
-            .and_then(|fs| detect_os_from_device(self.get_device_path(), fs))
+        self.get_file_system().and_then(|fs| detect_os_from_device(self.get_device_path(), fs))
     }
 
     /// True if the sectors in the compared partition differs from the source.
@@ -111,11 +106,18 @@ pub trait PartitionExt: BlockDeviceExt {
 
     /// Executes a given file system's dump command to obtain the minimum shrink size
     ///
+    /// The return value is measured in sectors normalized to the logical sector size
+    /// of the partition.
+    ///
     /// Returns `io::ErrorKind::NotFound` if getting usage is not supported.
     fn sectors_used(&self) -> io::Result<u64> {
+        let sector_size = self.get_logical_block_size();
         self.get_file_system()
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no file system"))
+            // Fetch the 512-byte sector size
             .and_then(|fs| sectors_used(self.get_device_path(), fs))
+            // Then normalize it to the actual sector size
+            .map(move |sectors| sectors / (sector_size / 512))
     }
 }
 
@@ -137,29 +139,30 @@ mod tests {
 
     struct Fake {
         start_sector: u64,
-        end_sector: u64,
-        filesystem: Option<FileSystem>,
-        name: Option<String>,
-        part_type: PartitionType,
-        flags: Vec<PartitionFlag>
+        end_sector:   u64,
+        filesystem:   Option<FileSystem>,
+        name:         Option<String>,
+        part_type:    PartitionType,
+        flags:        Vec<PartitionFlag>,
     }
 
     impl Default for Fake {
         fn default() -> Fake {
             Self {
                 start_sector: 0,
-                end_sector: 1,
-                filesystem: None,
-                name: None,
-                part_type: PartitionType::Primary,
-                flags: Vec::new()
+                end_sector:   1,
+                filesystem:   None,
+                name:         None,
+                part_type:    PartitionType::Primary,
+                flags:        Vec::new(),
             }
         }
     }
 
     impl BlockDeviceExt for Fake {
-        fn get_device_path(&self) -> &Path { &Path::new("/dev/fake/block") }
-        fn get_mount_point(&self) -> Option<&Path> { None }
+        fn get_device_name(&self) -> &str { "fictional" }
+
+        fn get_device_path(&self) -> &Path { Path::new("/dev/fictional")  }
     }
 
     impl PartitionExt for Fake {
