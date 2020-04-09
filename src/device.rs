@@ -49,7 +49,13 @@ pub trait BlockDeviceExt {
     fn get_mount_point(&self) -> Option<&Path> { None }
 
     /// The name of the device, such as `sda1`.
-    fn get_device_name(&self) -> &str;
+    fn get_device_name(&self) -> &str {
+        self.get_device_path()
+            .file_name()
+            .expect("BlockDeviceExt::get_device_path missing file_name")
+            .to_str()
+            .expect("BlockDeviceExt::get_device_path invalid file_name")
+    }
 
     /// The combined total number of sectors on the disk.
     fn get_sectors(&self) -> u64 {

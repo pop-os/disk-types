@@ -1,6 +1,6 @@
 [package]
 name = "disk-types"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Jeremy Soller <jackpot51@gmail.com>", "Michael Aaron Murphy <mmstickman@gmail.com>"]
 description = "Common traits and types for handling block devices, partitions, file systems, etc."
 repository = "https://github.com/pop-os/disk-types"
